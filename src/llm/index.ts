@@ -25,7 +25,7 @@ import { loadLLMConfig } from './config.js';
 import { CodeReviewService } from './codeReviewService.js';
 import { CodeReviewOptions, CodeReviewResult } from './types.js';
 
-export { CodeReviewOptions, CodeReviewResult };
+export type { CodeReviewOptions, CodeReviewResult };
 
 /**
  * Creates a new code review service with the default configuration

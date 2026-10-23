@@ -12,12 +12,14 @@ A custom MCP server that performs code reviews using Repomix and LLMs.
 
 ## Installation
 
+Requires Node.js 22 or later.
+
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/code-review-server.git
+git clone https://github.com/crazyrabbitLTC/mcp-code-review-server.git code-review-server
 cd code-review-server
 
-# Install dependencies
+# Install dependencies (this also builds the server)
 npm install
 
 # Build the server
@@ -132,9 +134,9 @@ npm run inspector
 
 The code review server integrates directly with multiple LLM provider APIs:
 
-- **OpenAI** (default: gpt-4o)
-- **Anthropic** (default: claude-3-opus-20240307)
-- **Gemini** (default: gemini-1.5-pro)
+- **OpenAI** (default: gpt-6-astra)
+- **Anthropic** (default: claude-opus-5-5)
+- **Gemini** (default: gemini-2.5-pro)
 
 ### Provider Configuration
 
@@ -156,9 +158,9 @@ You can optionally specify which model to use for each provider:
 
 ```bash
 # Optional: Override the default models
-OPENAI_MODEL=gpt-4-turbo
-ANTHROPIC_MODEL=claude-3-sonnet-20240229
-GEMINI_MODEL=gemini-1.5-flash-preview
+OPENAI_MODEL=gpt-6.1-sol
+ANTHROPIC_MODEL=claude-sonnet-5-5
+GEMINI_MODEL=gemini-3.1-pro-preview
 ```
 
 ### How the LLM Integration Works

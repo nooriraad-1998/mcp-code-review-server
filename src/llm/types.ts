@@ -28,6 +28,11 @@ export interface LLMConfig {
    * The API key (if not provided in environment variables)
    */
   apiKey?: string;
+
+  /**
+   * Maximum number of tokens the LLM may generate per request
+   */
+  maxTokens?: number;
 }
 
 /**
@@ -98,4 +103,12 @@ export interface CodeReviewResult {
    * List of overall recommendations
    */
   recommendations: string[];
+
+  /**
+   * How much of the codebase was reviewed, in parts sent to the LLM
+   */
+  coverage?: {
+    reviewedParts: number;
+    totalParts: number;
+  };
 } 

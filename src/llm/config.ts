@@ -24,9 +24,9 @@ const apiKeyEnvVars: Record<LLMProvider, string> = {
  * Default models for each provider
  */
 const defaultModels: Record<LLMProvider, string> = {
-  OPEN_AI: 'gpt-4o',
-  ANTHROPIC: 'claude-3-opus-20240307',
-  GEMINI: 'gemini-1.5-pro'
+  OPEN_AI: 'gpt-6-astra',
+  ANTHROPIC: 'claude-opus-5-5',
+  GEMINI: 'gemini-2.5-pro'
 };
 
 /**
@@ -64,11 +64,21 @@ export function loadLLMConfig(): LLMConfig {
   // Get the model
   const modelEnvVar = modelEnvVars[provider as LLMProvider];
   const model = process.env[modelEnvVar] || defaultModels[provider as LLMProvider];
-  console.log(`Using LLM provider: ${provider}, model: ${model}`);
-  
+  console.error(`Using LLM provider: ${provider}, model: ${model}`);
+
+  // Get the output token limit
+  let maxTokens: number | undefined;
+  if (process.env.LLM_MAX_TOKENS) {
+    maxTokens = Number(process.env.LLM_MAX_TOKENS);
+    if (!Number.isInteger(maxTokens) || maxTokens <= 0) {
+      throw new Error(`LLM_MAX_TOKENS must be a positive whole number, got "${process.env.LLM_MAX_TOKENS}"`);
+    }
+  }
+
   return {
     provider: provider as LLMProvider,
     model,
-    apiKey
+    apiKey,
+    maxTokens
   };
 } 

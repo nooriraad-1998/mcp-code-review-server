@@ -19,6 +19,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { executeRepomix, RepomixOptions } from './repomix.js';
+import { installCrashHandlers } from './crashHandlers.js';
 import * as fs from 'fs';
 import { createCodeReviewService, CodeReviewOptions, CodeReviewResult } from './llm/index.js';
 import { z } from 'zod';
@@ -34,7 +35,8 @@ const server = new McpServer({
 const analyzeRepoParams = {
   repoPath: z.string().describe('Path to the repository to analyze'),
   specificFiles: z.array(z.string()).optional().describe('Specific files to analyze'),
-  fileTypes: z.array(z.string()).optional().describe('File types to include in the analysis')
+  fileTypes: z.array(z.string()).optional().describe('File types to include in the analysis'),
+  excludePaths: z.array(z.string()).optional().describe('Files or directories to leave out of the analysis')
 };
 
 // Register the analyze_repo tool with description
@@ -44,9 +46,10 @@ server.tool(
   analyzeRepoParams,
   async (params) => {
     const options: RepomixOptions = {
-      includePaths: params.specificFiles,
+      repoPath: params.repoPath,
+      specificFiles: params.specificFiles,
       fileTypes: params.fileTypes,
-      outputFormat: 'plain'
+      excludePaths: params.excludePaths
     };
     
     const result = await executeRepomix(options);
@@ -59,6 +62,7 @@ const codeReviewParams = {
   repoPath: z.string().describe('Path to the repository to analyze'),
   specificFiles: z.array(z.string()).optional().describe('Specific files to review'),
   fileTypes: z.array(z.string()).optional().describe('File types to include in the review'),
+  excludePaths: z.array(z.string()).optional().describe('Files or directories to leave out of the review'),
   detailLevel: z.enum(['basic', 'detailed']).optional().describe('Level of detail for the code review'),
   focusAreas: z.array(z.enum(['security', 'performance', 'quality', 'maintainability'])).optional().describe('Areas to focus on during the code review')
 };
@@ -72,9 +76,10 @@ server.tool(
     try {
       // Execute Repomix to get the flattened codebase
       const repomixOptions: RepomixOptions = {
-        includePaths: params.specificFiles || [params.repoPath],
+        repoPath: params.repoPath,
+        specificFiles: params.specificFiles,
         fileTypes: params.fileTypes,
-        outputFormat: 'plain',
+        excludePaths: params.excludePaths,
       };
       
       const repomixOutput = await executeRepomix(repomixOptions);
@@ -134,20 +139,12 @@ const transport = new StdioServerTransport();
 // Connect to the transport and handle errors
 server.connect(transport)
   .then(() => {
-    console.log('Server started successfully!');
+    console.error('Server started successfully!');
   })
   .catch(error => {
     console.error('Failed to start server:', error);
     process.exit(1);
   });
 
-// Add a global error handler to prevent crashes
-process.on('uncaughtException', (error) => {
-  console.error('Uncaught exception:', error);
-  // Don't exit the process to keep the server running
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled rejection at:', promise, 'reason:', reason);
-  // Don't exit the process to keep the server running
-});
+// Exit on unexpected errors instead of running on in an unknown state
+installCrashHandlers();

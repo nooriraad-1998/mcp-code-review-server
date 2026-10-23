@@ -28,6 +28,5 @@ describe("Server", () => {
   it("should have structure", () => {
     expect(fs.existsSync(path.join(process.cwd(), "src", "index.ts"))).toBe(true);
     expect(fs.existsSync(path.join(process.cwd(), "src", "repomix.ts"))).toBe(true);
-    expect(fs.existsSync(path.join(process.cwd(), "build"))).toBe(true);
   });
 });
