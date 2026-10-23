@@ -35,7 +35,8 @@ const analyzeRepoParams = {
 // Register the analyze_repo tool with description
 server.tool('analyze_repo', 'Use this tool when you need to analyze a code repository structure without performing a detailed review. This tool flattens the repository into a textual representation and is ideal for getting a high-level overview of code organization, directory structure, and file contents. Use it before code_review when you need to understand the codebase structure first, or when a full code review is not needed.', analyzeRepoParams, async (params) => {
     const options = {
-        includePaths: params.specificFiles,
+        repoPath: params.repoPath,
+        specificFiles: params.specificFiles,
         fileTypes: params.fileTypes,
         outputFormat: 'plain'
     };
@@ -55,7 +56,8 @@ server.tool('code_review', 'Use this tool when you need a comprehensive code rev
     try {
         // Execute Repomix to get the flattened codebase
         const repomixOptions = {
-            includePaths: params.specificFiles || [params.repoPath],
+            repoPath: params.repoPath,
+            specificFiles: params.specificFiles,
             fileTypes: params.fileTypes,
             outputFormat: 'plain',
         };

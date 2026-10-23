@@ -76,7 +76,8 @@ Options:
         // Execute Repomix to get the flattened codebase
         console.log('\nExecuting Repomix to flatten the codebase...');
         const repomixOutput = await executeRepomix({
-            includePaths: specificFiles || [repoPath],
+            repoPath,
+            specificFiles,
             fileTypes,
             outputFormat: 'plain',
         });

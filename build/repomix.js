@@ -15,53 +15,71 @@
  * - Configure analysis options
  * - Process analysis results
  */
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import * as util from 'util';
+import { createRequire } from 'module';
+const execFileAsync = util.promisify(execFile);
+/**
+ * Path to the Repomix CLI script, resolved from the installed package so it
+ * works whether or not node_modules/.bin is on PATH
+ */
+const REPOMIX_BIN = path.join(path.dirname(createRequire(import.meta.url).resolve('repomix')), '..', 'bin', 'repomix.cjs');
+/**
+ * Converts specificFiles into Repomix include patterns relative to the repository,
+ * rejecting anything that would escape it or be split by Repomix's comma syntax
+ * @param repoPath Absolute path of the repository
+ * @param specificFiles Files or glob patterns to include
+ * @returns Include patterns relative to repoPath
+ */
+function toIncludePatterns(repoPath, specificFiles) {
+    return specificFiles.map((file) => {
+        if (file.includes(',')) {
+            throw new Error(`Invalid file pattern "${file}": commas are not allowed`);
+        }
+        const relative = path.relative(repoPath, path.resolve(repoPath, file));
+        if (relative === '') {
+            return '**';
+        }
+        if (relative.startsWith('..') || path.isAbsolute(relative)) {
+            throw new Error(`File "${file}" is outside the repository ${repoPath}`);
+        }
+        return relative.split(path.sep).join('/');
+    });
+}
 /**
  * Executes Repomix analysis with the given options
  * @param options Configuration options for the analysis
  * @returns Promise resolving to the analysis results
  */
 export async function executeRepomix(options = {}) {
-    console.error('Analyzing repository at', options, 'with Repomix...');
-    // In test environment or Bun test, return mock result
-    if (process.env.NODE_ENV === 'test' || process.env.BUN_ENV === 'test') {
-        console.error('Running in test mode, returning mock result');
-        return 'Repomix analysis completed';
+    const repoPath = path.resolve(options.repoPath ?? process.cwd());
+    console.error('Analyzing repository at', repoPath, 'with Repomix...');
+    if (!fs.statSync(repoPath, { throwIfNoEntry: false })?.isDirectory()) {
+        throw new Error(`Repository path ${repoPath} is not a directory`);
     }
-    // The real implementation would call the Repomix CLI
+    const includePatterns = toIncludePatterns(repoPath, options.specificFiles ?? []);
+    // Write to a fresh temp file so no stale or concurrent output is ever read back
+    const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'repomix-'));
+    const outputPath = path.join(outputDir, 'repomix-output.txt');
+    // Arguments go straight to the process, never through a shell
+    const args = [REPOMIX_BIN, '--style', 'plain', '--output', outputPath];
+    if (includePatterns.length > 0) {
+        args.push('--include', includePatterns.join(','));
+    }
+    args.push('--', repoPath);
     try {
-        const execPromise = util.promisify(exec);
-        const outputPath = path.join(process.cwd(), 'repomix-output.txt');
-        let command = 'repomix';
-        // Add style flag
-        command += ' --style plain';
-        // Add include paths
-        if (options.includePaths && options.includePaths.length > 0) {
-            const paths = options.includePaths.join(' ');
-            command += ` ${paths}`;
-        }
-        else {
-            command += ' .';
-        }
-        // Add output redirection
-        command += ` && cat repomix-output.txt`;
-        // Mock return in case running tests
-        if (process.argv.includes('test')) {
-            return 'Repomix analysis completed';
-        }
-        const { stdout } = await execPromise(command);
-        return stdout || outputPath;
+        await execFileAsync(process.execPath, args, { cwd: repoPath, maxBuffer: 10 * 1024 * 1024 });
+        return fs.readFileSync(outputPath, 'utf-8');
     }
     catch (error) {
         console.error('Error executing Repomix:', error);
-        // Mock return in case of error during tests
-        if (process.argv.includes('test')) {
-            return 'Repomix analysis completed';
-        }
-        throw new Error(`Failed to execute Repomix: ${error}`);
+        throw new Error(`Failed to execute Repomix: ${error.message}`);
+    }
+    finally {
+        fs.rmSync(outputDir, { recursive: true, force: true });
     }
 }
 /**
@@ -131,7 +149,7 @@ Please review the code provided and give detailed feedback.
  */
 export async function analyzeRepo(repoPath, options = {}, systemPrompt, userPrompt) {
     // Execute Repomix to get the flattened codebase
-    const repomixOutputPath = await executeRepomix(options);
+    const repomixOutputPath = await executeRepomix({ ...options, repoPath });
     // Send the flattened codebase to an LLM for analysis
     const result = await sendToLLM(repomixOutputPath, systemPrompt || DEFAULT_SYSTEM_PROMPT, userPrompt || DEFAULT_USER_PROMPT);
     return result;

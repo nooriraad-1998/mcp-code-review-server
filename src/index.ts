@@ -44,7 +44,8 @@ server.tool(
   analyzeRepoParams,
   async (params) => {
     const options: RepomixOptions = {
-      includePaths: params.specificFiles,
+      repoPath: params.repoPath,
+      specificFiles: params.specificFiles,
       fileTypes: params.fileTypes,
       outputFormat: 'plain'
     };
@@ -72,7 +73,8 @@ server.tool(
     try {
       // Execute Repomix to get the flattened codebase
       const repomixOptions: RepomixOptions = {
-        includePaths: params.specificFiles || [params.repoPath],
+        repoPath: params.repoPath,
+        specificFiles: params.specificFiles,
         fileTypes: params.fileTypes,
         outputFormat: 'plain',
       };
