@@ -12,12 +12,14 @@ A custom MCP server that performs code reviews using Repomix and LLMs.
 
 ## Installation
 
+Requires Node.js 22 or later.
+
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/code-review-server.git
+git clone https://github.com/crazyrabbitLTC/mcp-code-review-server.git code-review-server
 cd code-review-server
 
-# Install dependencies
+# Install dependencies (this also builds the server)
 npm install
 
 # Build the server

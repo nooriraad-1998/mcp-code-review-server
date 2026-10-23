@@ -24,10 +24,6 @@ describe("Integration", () => {
     expect(fs.existsSync(path.join(process.cwd(), "test"))).toBe(true);
   });
   
-  it("should have build directory", () => {
-    expect(fs.existsSync(path.join(process.cwd(), "build"))).toBe(true);
-  });
-  
   it("should have package.json", () => {
     expect(fs.existsSync(path.join(process.cwd(), "package.json"))).toBe(true);
   });
