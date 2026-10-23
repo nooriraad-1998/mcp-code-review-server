@@ -6,7 +6,8 @@
  */
 
 import * as fs from 'fs';
-import { LLMConfig, CodeReviewOptions, CodeReviewResult } from './types.js';
+import { LLMConfig, CodeReviewOptions, CodeReviewResult, CodeReviewIssue } from './types.js';
+import type { ExcludedFile } from '../repomix.js';
 import { LLMService } from './service.js';
 import { CodeReviewPromptBuilder } from './prompt.js';
 import { CodeProcessor } from './processor.js';
@@ -16,6 +17,22 @@ import { callWithRetry } from './errors.js';
  * Default maximum number of parts of a large codebase to review
  */
 const DEFAULT_MAX_PARTS = 5;
+
+/**
+ * Reports a file the secret scan kept from the LLM, so a likely credential is
+ * never silently missing from the review (and a planted one cannot hide code)
+ * @param file File Repomix left out
+ * @returns Issue describing the file
+ */
+function excludedFileIssue(file: ExcludedFile): CodeReviewIssue {
+  const credentials = `${file.issueCount} likely credential${file.issueCount === 1 ? '' : 's'}`;
+  return {
+    type: 'SECURITY',
+    severity: 'HIGH',
+    description: `${file.path} contains ${credentials} and was not reviewed: the secret scan kept it from being sent to the LLM.`,
+    recommendation: `Move the credentials out of ${file.path} (for example into environment variables), rotate any that are real, and check the rest of the file by hand.`
+  };
+}
 
 /**
  * Service for performing code reviews
@@ -51,9 +68,14 @@ export class CodeReviewService {
    * Reviews code from repomix output
    * @param repomixOutput Repomix output or path to Repomix output file
    * @param options Code review options
+   * @param excludedFiles Files Repomix's secret scan left out, reported as issues
    * @returns Code review result
    */
-  async reviewCodeFromRepomix(repomixOutput: string, options: CodeReviewOptions): Promise<CodeReviewResult> {
+  async reviewCodeFromRepomix(
+    repomixOutput: string,
+    options: CodeReviewOptions,
+    excludedFiles: ExcludedFile[] = []
+  ): Promise<CodeReviewResult> {
     console.error('Processing Repomix output...');
     const parts = await this.codeProcessor.processRepomixOutput(repomixOutput);
     const partsToReview = parts.slice(0, this.maxParts());
@@ -65,7 +87,9 @@ export class CodeReviewService {
       results.push(await this.reviewCode(partsToReview[i], options, part));
     }
 
-    return this.mergeResults(results, parts.length);
+    const merged = this.mergeResults(results, parts.length);
+    merged.issues = [...excludedFiles.map(excludedFileIssue), ...merged.issues];
+    return merged;
   }
 
   /**

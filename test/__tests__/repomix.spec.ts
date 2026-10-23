@@ -15,7 +15,7 @@ import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { executeRepomix, RepomixOptions } from "../../src/repomix.js"; 
+import { executeRepomix, packRepository, RepomixOptions } from "../../src/repomix.js"; 
 
 describe("Repomix", () => { 
   const testDir = path.join(process.cwd(), "test", "testRepo"); 
@@ -101,6 +101,97 @@ describe("Repomix", () => {
     await expect(
       executeRepomix({ repoPath: testDir, specificFiles: ["../../package.json"] })
     ).rejects.toThrow(/outside the repository/);
+  });
+
+  describe("symlinks", () => {
+    const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "repomix-outside-"));
+
+    beforeAll(() => {
+      fs.writeFileSync(path.join(outsideDir, "secret.txt"), "OUTSIDE_THE_REPOSITORY");
+      fs.symlinkSync(outsideDir, path.join(testDir, "linkdir"));
+      fs.symlinkSync("/", path.join(testDir, "root"));
+      fs.symlinkSync(path.join(testDir, "lib"), path.join(testDir, "inside"));
+    });
+
+    afterAll(() => {
+      fs.rmSync(outsideDir, { recursive: true, force: true });
+      for (const link of ["linkdir", "root", "inside"]) {
+        fs.rmSync(path.join(testDir, link), { force: true });
+      }
+    });
+
+    it("rejects a symlinked directory that leads outside repoPath", async () => {
+      await expect(
+        executeRepomix({ repoPath: testDir, specificFiles: ["linkdir"] })
+      ).rejects.toThrow(/symlink to somewhere outside the repository/);
+    });
+
+    it("rejects files reached through a symlink to the filesystem root", async () => {
+      await expect(
+        executeRepomix({ repoPath: testDir, specificFiles: ["root/etc/passwd"] })
+      ).rejects.toThrow(/symlink to somewhere outside the repository/);
+    });
+
+    it("rejects globs whose literal part goes through an outside symlink", async () => {
+      await expect(
+        executeRepomix({ repoPath: testDir, specificFiles: ["linkdir/**/*.txt"] })
+      ).rejects.toThrow(/symlink to somewhere outside the repository/);
+    });
+
+    it("does not follow outside symlinks matched by a wildcard", async () => {
+      const output = await executeRepomix({ repoPath: testDir, specificFiles: ["*/secret.txt"] }).catch(() => "");
+
+      expect(output).not.toContain("OUTSIDE_THE_REPOSITORY");
+    });
+
+    it("allows a symlink that stays inside repoPath", async () => {
+      await expect(executeRepomix({ repoPath: testDir, specificFiles: ["inside"] })).resolves.toBeString();
+    });
+
+    it("packs a repoPath that is itself reached through a symlink", async () => {
+      const alias = path.join(outsideDir, "repo-alias");
+      fs.symlinkSync(testDir, alias);
+
+      const output = await executeRepomix({ repoPath: alias, specificFiles: ["test.ts"] });
+
+      expect(output).toContain("function subtract");
+    });
+  });
+
+  describe("secret scan", () => {
+    const secretsDir = fs.mkdtempSync(path.join(os.tmpdir(), "repomix-secrets-"));
+    // Built at runtime so the repository itself never contains a credential-shaped string
+    const credential = ["postgres://admin:", "Sup3rS3cret", "@prod-db:5432/app"].join("");
+
+    beforeAll(() => {
+      fs.writeFileSync(path.join(secretsDir, "db.js"), `const db = "${credential}";\nconst HIDDEN_CODE = 1;\n`);
+      fs.writeFileSync(path.join(secretsDir, "app.js"), "const visible = 1;\n");
+    });
+
+    afterAll(() => {
+      fs.rmSync(secretsDir, { recursive: true, force: true });
+    });
+
+    it("lists files the secret scan excluded", async () => {
+      const { output, excludedFiles } = await packRepository({ repoPath: secretsDir });
+
+      expect(excludedFiles).toEqual([{ path: "db.js", issueCount: 1 }]);
+      expect(output).toContain("const visible = 1;");
+      expect(output).not.toContain("HIDDEN_CODE");
+    });
+
+    it("warns about excluded files at the top of analyze output", async () => {
+      const output = await executeRepomix({ repoPath: secretsDir });
+
+      expect(output.startsWith("WARNING: 1 file(s) were left out")).toBe(true);
+      expect(output).toContain("- db.js (1 likely credential)");
+    });
+
+    it("reports no excluded files for a clean repository", async () => {
+      const { excludedFiles } = await packRepository({ repoPath: testDir, specificFiles: ["test.ts"] });
+
+      expect(excludedFiles).toEqual([]);
+    });
   });
 
   it("limits the output to fileTypes", async () => {
