@@ -56,11 +56,11 @@ export interface CodeReviewResult {
  * @returns Promise resolving to the analysis results
  */
 export async function executeRepomix(options: RepomixOptions = {}): Promise<string> {
-  console.log('Analyzing repository at', options, 'with Repomix...');
+  console.error('Analyzing repository at', options, 'with Repomix...');
   
   // In test environment or Bun test, return mock result
   if (process.env.NODE_ENV === 'test' || process.env.BUN_ENV === 'test') {
-    console.log('Running in test mode, returning mock result');
+    console.error('Running in test mode, returning mock result');
     return 'Repomix analysis completed';
   }
   
@@ -121,7 +121,7 @@ export async function sendToLLM(
   try {
     // Read the Repomix output file
     const codebaseContent = fs.readFileSync(repomixOutputPath, 'utf-8');
-    console.log(`Read ${codebaseContent.length} characters from Repomix output`);
+    console.error(`Read ${codebaseContent.length} characters from Repomix output`);
     
     // For now, return a placeholder result
     // TODO: Implement actual LLM API call

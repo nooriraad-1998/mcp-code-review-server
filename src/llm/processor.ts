@@ -43,10 +43,10 @@ export class CodeProcessor {
       
       // If the output is a file path, read it
       if (repomixOutput.trim().endsWith('.txt') && fs.existsSync(repomixOutput.trim())) {
-        console.log(`Reading Repomix output from file: ${repomixOutput}`);
+        console.error(`Reading Repomix output from file: ${repomixOutput}`);
         content = fs.readFileSync(repomixOutput.trim(), 'utf-8');
       } else {
-        console.log('Processing Repomix output from string');
+        console.error('Processing Repomix output from string');
       }
       
       // Process the output
@@ -56,7 +56,7 @@ export class CodeProcessor {
       if (processedOutput.length > this.MAX_CHARS_PER_CHUNK) {
         console.warn(`Repomix output exceeds maximum size (${this.MAX_CHARS_PER_CHUNK} chars). Chunking content...`);
         const chunks = this.chunkLargeCodebase(processedOutput);
-        console.log(`Split content into ${chunks.length} chunks. Using first chunk.`);
+        console.error(`Split content into ${chunks.length} chunks. Using first chunk.`);
         return chunks[0];
       }
       

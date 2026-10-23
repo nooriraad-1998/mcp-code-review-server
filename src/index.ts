@@ -134,7 +134,7 @@ const transport = new StdioServerTransport();
 // Connect to the transport and handle errors
 server.connect(transport)
   .then(() => {
-    console.log('Server started successfully!');
+    console.error('Server started successfully!');
   })
   .catch(error => {
     console.error('Failed to start server:', error);

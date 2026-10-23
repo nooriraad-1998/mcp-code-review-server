@@ -45,7 +45,7 @@ export class LLMService {
    */
   constructor(config: LLMConfig) {
     this.config = config;
-    console.log(`LLM service initialized with provider ${config.provider} and model ${config.model}`);
+    console.error(`LLM service initialized with provider ${config.provider} and model ${config.model}`);
   }
   
   /**
@@ -55,7 +55,7 @@ export class LLMService {
    */
   async generateReview(prompt: string): Promise<CodeReviewResult> {
     try {
-      console.log('Sending code review request to LLM...');
+      console.error('Sending code review request to LLM...');
       
       // Ensure API key exists
       if (!this.config.apiKey) {
@@ -90,8 +90,7 @@ export class LLMService {
             model: this.config.model,
             messages: [{ role: 'user', content: prompt }],
             temperature: 0,
-            max_tokens: 4000,
-            response_format: { type: 'json_object' }
+            max_tokens: 4000
           };
           break;
         

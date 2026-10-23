@@ -37,7 +37,7 @@ export class CodeReviewService {
    * @returns Code review result
    */
   async reviewCodeFromFile(filePath: string, options: CodeReviewOptions): Promise<CodeReviewResult> {
-    console.log(`Reviewing code from file: ${filePath}`);
+    console.error(`Reviewing code from file: ${filePath}`);
     const code = fs.readFileSync(filePath, 'utf-8');
     return this.reviewCode(code, options);
   }
@@ -49,9 +49,9 @@ export class CodeReviewService {
    * @returns Code review result
    */
   async reviewCodeFromRepomix(repomixOutput: string, options: CodeReviewOptions): Promise<CodeReviewResult> {
-    console.log('Processing Repomix output...');
+    console.error('Processing Repomix output...');
     const processedRepo = await this.codeProcessor.processRepomixOutput(repomixOutput);
-    console.log(`Processed Repomix output (${processedRepo.length} characters)`);
+    console.error(`Processed Repomix output (${processedRepo.length} characters)`);
     return this.reviewCode(processedRepo, options);
   }
   
@@ -63,10 +63,10 @@ export class CodeReviewService {
    */
   private async reviewCode(code: string, options: CodeReviewOptions): Promise<CodeReviewResult> {
     try {
-      console.log('Building code review prompt...');
+      console.error('Building code review prompt...');
       const prompt = this.promptBuilder.buildCodeReviewPrompt(code, options);
       
-      console.log('Sending code to LLM for review...');
+      console.error('Sending code to LLM for review...');
       // Use retry logic for robustness
       const result = await callWithRetry(
         () => this.llmService.generateReview(prompt),
@@ -74,7 +74,7 @@ export class CodeReviewService {
         2000 // initial delay
       );
       
-      console.log('Review completed successfully');
+      console.error('Review completed successfully');
       return result;
     } catch (error) {
       console.error('Error reviewing code:', error);

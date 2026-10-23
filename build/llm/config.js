@@ -54,7 +54,7 @@ export function loadLLMConfig() {
     // Get the model
     const modelEnvVar = modelEnvVars[provider];
     const model = process.env[modelEnvVar] || defaultModels[provider];
-    console.log(`Using LLM provider: ${provider}, model: ${model}`);
+    console.error(`Using LLM provider: ${provider}, model: ${model}`);
     return {
         provider: provider,
         model,
