@@ -156,8 +156,14 @@ export async function executeRepomix(options: RepomixOptions = {}): Promise<stri
   const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'repomix-'));
   const outputPath = path.join(outputDir, 'repomix-output.txt');
 
+  // Repomix runs repomix.config.js/.ts files as code, so never let it load one
+  // from the repository under review (or the user's global config): passing our
+  // own empty config makes it skip both
+  const configPath = path.join(outputDir, 'repomix.config.json');
+  fs.writeFileSync(configPath, '{}');
+
   // Arguments go straight to the process, never through a shell
-  const args = [REPOMIX_BIN, '--style', 'plain', '--output', outputPath];
+  const args = [REPOMIX_BIN, '--style', 'plain', '--output', outputPath, '--config', configPath];
   if (includePatterns.length > 0) {
     args.push('--include', includePatterns.join(','));
   }
