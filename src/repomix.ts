@@ -41,34 +41,98 @@ const REPOMIX_BIN = path.join(
  */
 export interface RepomixOptions {
   repoPath?: string;         // Repository to pack (defaults to the current directory)
-  excludePaths?: string[];
-  fileTypes?: string[];
-  specificFiles?: string[];  // Files or glob patterns, relative to repoPath
-  recentOnly?: boolean;
-  outputFormat?: 'plain' | 'json';
-  maxFiles?: number;
+  specificFiles?: string[];  // Files, directories or glob patterns, relative to repoPath
+  fileTypes?: string[];      // Extensions to include, such as ".ts" or "ts"
+  excludePaths?: string[];   // Files, directories or glob patterns to leave out
 }
 
 /**
- * Converts specificFiles into Repomix include patterns relative to the repository,
- * rejecting anything that would escape it or be split by Repomix's comma syntax
+ * Converts a path into a pattern relative to the repository, rejecting anything
+ * that would escape it or be split by Repomix's comma syntax
  * @param repoPath Absolute path of the repository
- * @param specificFiles Files or glob patterns to include
- * @returns Include patterns relative to repoPath
+ * @param file File, directory or glob pattern
+ * @returns Path relative to repoPath ('' for the repository itself)
  */
-function toIncludePatterns(repoPath: string, specificFiles: string[]): string[] {
-  return specificFiles.map((file) => {
-    if (file.includes(',')) {
-      throw new Error(`Invalid file pattern "${file}": commas are not allowed`);
+function toRepoRelative(repoPath: string, file: string): string {
+  if (file.includes(',')) {
+    throw new Error(`Invalid path "${file}": commas are not allowed`);
+  }
+  const relative = path.relative(repoPath, path.resolve(repoPath, file));
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error(`File "${file}" is outside the repository ${repoPath}`);
+  }
+  return relative.split(path.sep).join('/');
+}
+
+/**
+ * Checks whether a repository-relative path is an existing directory
+ */
+function isDirectory(repoPath: string, relative: string): boolean {
+  return fs.statSync(path.join(repoPath, relative), { throwIfNoEntry: false })?.isDirectory() ?? false;
+}
+
+/**
+ * Normalizes file types to bare extensions, such as "ts"
+ * @param fileTypes Extensions with or without a leading dot
+ * @returns Extensions without the dot
+ */
+function toExtensions(fileTypes: string[]): string[] {
+  return fileTypes.map((type) => {
+    const extension = type.startsWith('.') ? type.slice(1) : type;
+    if (!/^[A-Za-z0-9_-]+$/.test(extension)) {
+      throw new Error(`Invalid file type "${type}": use an extension such as ".ts"`);
     }
-    const relative = path.relative(repoPath, path.resolve(repoPath, file));
+    return extension;
+  });
+}
+
+/**
+ * Builds Repomix include patterns from specificFiles and fileTypes. With both,
+ * fileTypes filters the files and applies inside the directories.
+ * @param repoPath Absolute path of the repository
+ * @param specificFiles Files, directories or glob patterns to include
+ * @param fileTypes Extensions to include
+ * @returns Include patterns relative to repoPath (empty means everything)
+ */
+function toIncludePatterns(repoPath: string, specificFiles: string[], fileTypes: string[]): string[] {
+  const extensions = toExtensions(fileTypes);
+  const typePatterns = (base: string) =>
+    extensions.map((extension) => (base ? `${base}/**/*.${extension}` : `**/*.${extension}`));
+
+  if (specificFiles.length === 0) {
+    return typePatterns('');
+  }
+
+  const patterns = specificFiles.flatMap((file) => {
+    const relative = toRepoRelative(repoPath, file);
+    if (extensions.length === 0) {
+      return [relative || '**'];
+    }
+    if (relative === '' || isDirectory(repoPath, relative)) {
+      return typePatterns(relative);
+    }
+    return extensions.includes(path.extname(relative).slice(1)) ? [relative] : [];
+  });
+
+  if (patterns.length === 0) {
+    throw new Error(`None of the specificFiles have the requested fileTypes (${fileTypes.join(', ')})`);
+  }
+  return patterns;
+}
+
+/**
+ * Builds Repomix ignore patterns from excludePaths
+ * @param repoPath Absolute path of the repository
+ * @param excludePaths Files, directories or glob patterns to leave out
+ * @returns Ignore patterns relative to repoPath
+ */
+function toIgnorePatterns(repoPath: string, excludePaths: string[]): string[] {
+  return excludePaths.map((file) => {
+    const relative = toRepoRelative(repoPath, file);
     if (relative === '') {
-      return '**';
+      throw new Error('excludePaths cannot exclude the whole repository');
     }
-    if (relative.startsWith('..') || path.isAbsolute(relative)) {
-      throw new Error(`File "${file}" is outside the repository ${repoPath}`);
-    }
-    return relative.split(path.sep).join('/');
+    return isDirectory(repoPath, relative) ? `${relative}/**` : relative;
   });
 }
 
@@ -101,7 +165,8 @@ export async function executeRepomix(options: RepomixOptions = {}): Promise<stri
     throw new Error(`Repository path ${repoPath} is not a directory`);
   }
 
-  const includePatterns = toIncludePatterns(repoPath, options.specificFiles ?? []);
+  const includePatterns = toIncludePatterns(repoPath, options.specificFiles ?? [], options.fileTypes ?? []);
+  const ignorePatterns = toIgnorePatterns(repoPath, options.excludePaths ?? []);
 
   // Write to a fresh temp file so no stale or concurrent output is ever read back
   const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'repomix-'));
@@ -111,6 +176,9 @@ export async function executeRepomix(options: RepomixOptions = {}): Promise<stri
   const args = [REPOMIX_BIN, '--style', 'plain', '--output', outputPath];
   if (includePatterns.length > 0) {
     args.push('--include', includePatterns.join(','));
+  }
+  if (ignorePatterns.length > 0) {
+    args.push('--ignore', ignorePatterns.join(','));
   }
   args.push('--', repoPath);
 

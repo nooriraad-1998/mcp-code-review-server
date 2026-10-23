@@ -31,10 +31,14 @@ describe("Repomix", () => {
     ); 
     
     fs.writeFileSync(
-      path.join(testDir, "test.ts"), 
+      path.join(testDir, "test.ts"),
       "function subtract(a: number, b: number): number { return a - b; }"
-    ); 
-  }); 
+    );
+
+    fs.mkdirSync(path.join(testDir, "lib"), { recursive: true });
+    fs.writeFileSync(path.join(testDir, "lib", "multiply.js"), "function multiply(a, b) { return a * b; }");
+    fs.writeFileSync(path.join(testDir, "lib", "divide.ts"), "function divide(a: number, b: number) { return a / b; }");
+  });
   
   afterAll(() => { 
     if (fs.existsSync(testDir)) { 
@@ -96,6 +100,62 @@ describe("Repomix", () => {
   it("rejects specificFiles that point outside repoPath", async () => {
     await expect(
       executeRepomix({ repoPath: testDir, specificFiles: ["../../package.json"] })
+    ).rejects.toThrow(/outside the repository/);
+  });
+
+  it("limits the output to fileTypes", async () => {
+    const output = await executeRepomix({ repoPath: testDir, fileTypes: [".ts"] });
+
+    expect(output).toContain("function subtract");
+    expect(output).toContain("function divide");
+    expect(output).not.toContain("function add");
+    expect(output).not.toContain("function multiply");
+  });
+
+  it("accepts fileTypes without a leading dot", async () => {
+    const output = await executeRepomix({ repoPath: testDir, fileTypes: ["js"] });
+
+    expect(output).toContain("function add");
+    expect(output).not.toContain("function subtract");
+  });
+
+  it("applies fileTypes inside a directory given in specificFiles", async () => {
+    const output = await executeRepomix({ repoPath: testDir, specificFiles: ["lib"], fileTypes: [".js"] });
+
+    expect(output).toContain("function multiply");
+    expect(output).not.toContain("function divide");
+    expect(output).not.toContain("function add");
+  });
+
+  it("drops specificFiles that do not match fileTypes", async () => {
+    const output = await executeRepomix({
+      repoPath: testDir,
+      specificFiles: ["test.js", "test.ts"],
+      fileTypes: [".ts"],
+    });
+
+    expect(output).toContain("function subtract");
+    expect(output).not.toContain("function add");
+  });
+
+  it("rejects fileTypes that are not plain extensions", async () => {
+    await expect(
+      executeRepomix({ repoPath: testDir, fileTypes: ["*/../*"] })
+    ).rejects.toThrow(/Invalid file type/);
+  });
+
+  it("leaves out excludePaths", async () => {
+    const output = await executeRepomix({ repoPath: testDir, excludePaths: ["lib", "test.js"] });
+
+    expect(output).toContain("function subtract");
+    expect(output).not.toContain("function add");
+    expect(output).not.toContain("function multiply");
+    expect(output).not.toContain("function divide");
+  });
+
+  it("rejects excludePaths that point outside repoPath", async () => {
+    await expect(
+      executeRepomix({ repoPath: testDir, excludePaths: ["../other"] })
     ).rejects.toThrow(/outside the repository/);
   });
 

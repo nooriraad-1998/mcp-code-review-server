@@ -33,6 +33,7 @@ Arguments:
 Options:
   --files <file1,file2>     Specific files to review
   --types <.js,.ts>         File types to include in the review
+  --exclude <path1,path2>   Files or directories to leave out
   --detail <basic|detailed> Level of detail (default: detailed)
   --focus <areas>           Areas to focus on (security,performance,quality,maintainability)
   --help, -h                Show this help message
@@ -46,6 +47,7 @@ Options:
     // Parse options
     let specificFiles: string[] | undefined;
     let fileTypes: string[] | undefined;
+    let excludePaths: string[] | undefined;
     let detailLevel: 'basic' | 'detailed' = 'detailed';
     let focusAreas: ('security' | 'performance' | 'quality' | 'maintainability')[] = 
       ['security', 'performance', 'quality', 'maintainability'];
@@ -57,6 +59,8 @@ Options:
         specificFiles = args[++i].split(',');
       } else if (arg === '--types' && i + 1 < args.length) {
         fileTypes = args[++i].split(',');
+      } else if (arg === '--exclude' && i + 1 < args.length) {
+        excludePaths = args[++i].split(',');
       } else if (arg === '--detail' && i + 1 < args.length) {
         const detail = args[++i];
         if (detail === 'basic' || detail === 'detailed') {
@@ -79,6 +83,9 @@ Options:
     if (fileTypes) {
       console.log(`File types: ${fileTypes.join(', ')}`);
     }
+    if (excludePaths) {
+      console.log(`Excluded: ${excludePaths.join(', ')}`);
+    }
     console.log(`Detail level: ${detailLevel}`);
     console.log(`Focus areas: ${focusAreas.join(', ')}`);
     
@@ -88,7 +95,7 @@ Options:
       repoPath,
       specificFiles,
       fileTypes,
-      outputFormat: 'plain',
+      excludePaths,
     });
     console.log(`Repomix output: ${repomixOutput}`);
     

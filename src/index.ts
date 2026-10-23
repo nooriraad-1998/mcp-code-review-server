@@ -34,7 +34,8 @@ const server = new McpServer({
 const analyzeRepoParams = {
   repoPath: z.string().describe('Path to the repository to analyze'),
   specificFiles: z.array(z.string()).optional().describe('Specific files to analyze'),
-  fileTypes: z.array(z.string()).optional().describe('File types to include in the analysis')
+  fileTypes: z.array(z.string()).optional().describe('File types to include in the analysis'),
+  excludePaths: z.array(z.string()).optional().describe('Files or directories to leave out of the analysis')
 };
 
 // Register the analyze_repo tool with description
@@ -47,7 +48,7 @@ server.tool(
       repoPath: params.repoPath,
       specificFiles: params.specificFiles,
       fileTypes: params.fileTypes,
-      outputFormat: 'plain'
+      excludePaths: params.excludePaths
     };
     
     const result = await executeRepomix(options);
@@ -60,6 +61,7 @@ const codeReviewParams = {
   repoPath: z.string().describe('Path to the repository to analyze'),
   specificFiles: z.array(z.string()).optional().describe('Specific files to review'),
   fileTypes: z.array(z.string()).optional().describe('File types to include in the review'),
+  excludePaths: z.array(z.string()).optional().describe('Files or directories to leave out of the review'),
   detailLevel: z.enum(['basic', 'detailed']).optional().describe('Level of detail for the code review'),
   focusAreas: z.array(z.enum(['security', 'performance', 'quality', 'maintainability'])).optional().describe('Areas to focus on during the code review')
 };
@@ -76,7 +78,7 @@ server.tool(
         repoPath: params.repoPath,
         specificFiles: params.specificFiles,
         fileTypes: params.fileTypes,
-        outputFormat: 'plain',
+        excludePaths: params.excludePaths,
       };
       
       const repomixOutput = await executeRepomix(repomixOptions);
