@@ -35,9 +35,9 @@ export class CodeProcessor {
   /**
    * Processes Repomix output for review
    * @param repomixOutput Repomix output or path to output file
-   * @returns Processed code
+   * @returns Processed code, split into parts small enough to send to the LLM
    */
-  async processRepomixOutput(repomixOutput: string): Promise<string> {
+  async processRepomixOutput(repomixOutput: string): Promise<string[]> {
     try {
       let content = repomixOutput;
       
@@ -52,15 +52,13 @@ export class CodeProcessor {
       // Process the output
       const processedOutput = this.formatRepomixOutput(content);
       
-      // Check if we need to chunk the content due to size
-      if (processedOutput.length > this.MAX_CHARS_PER_CHUNK) {
-        console.warn(`Repomix output exceeds maximum size (${this.MAX_CHARS_PER_CHUNK} chars). Chunking content...`);
-        const chunks = this.chunkLargeCodebase(processedOutput);
-        console.error(`Split content into ${chunks.length} chunks. Using first chunk.`);
-        return chunks[0];
+      // Split the content into parts if it is too large for one request
+      const chunks = this.chunkLargeCodebase(processedOutput);
+      if (chunks.length > 1) {
+        console.error(`Repomix output exceeds ${this.MAX_CHARS_PER_CHUNK} chars. Split into ${chunks.length} parts.`);
       }
-      
-      return processedOutput;
+
+      return chunks;
     } catch (error) {
       console.error('Error processing Repomix output:', error);
       throw new Error(`Failed to process Repomix output: ${(error as Error).message}`);

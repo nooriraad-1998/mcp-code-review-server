@@ -6,6 +6,10 @@
  */
 import fetch from 'node-fetch';
 /**
+ * Default maximum number of tokens the LLM may generate per request
+ */
+const DEFAULT_MAX_TOKENS = 8192;
+/**
  * Service for interacting with LLMs via direct API calls
  */
 export class LLMService {
@@ -36,6 +40,7 @@ export class LLMService {
                 'Content-Type': 'application/json'
             };
             let requestBody;
+            const maxTokens = this.config.maxTokens ?? DEFAULT_MAX_TOKENS;
             switch (this.config.provider) {
                 case 'OPEN_AI':
                     endpoint = 'https://api.openai.com/v1/chat/completions';
@@ -44,7 +49,7 @@ export class LLMService {
                         model: this.config.model,
                         messages: [{ role: 'user', content: prompt }],
                         temperature: 0,
-                        max_tokens: 4000,
+                        max_tokens: maxTokens,
                         response_format: { type: 'json_object' }
                     };
                     break;
@@ -56,16 +61,18 @@ export class LLMService {
                         model: this.config.model,
                         messages: [{ role: 'user', content: prompt }],
                         temperature: 0,
-                        max_tokens: 4000
+                        max_tokens: maxTokens
                     };
                     break;
                 case 'GEMINI':
-                    endpoint = `https://generativelanguage.googleapis.com/v1/models/${this.config.model}:generateContent?key=${this.config.apiKey}`;
+                    // Key goes in a header so it never appears in URLs or error messages
+                    endpoint = `https://generativelanguage.googleapis.com/v1/models/${this.config.model}:generateContent`;
+                    headers['x-goog-api-key'] = this.config.apiKey;
                     requestBody = {
                         contents: [{ role: 'user', parts: [{ text: prompt }] }],
                         generationConfig: {
                             temperature: 0,
-                            maxOutputTokens: 4000
+                            maxOutputTokens: maxTokens
                         }
                     };
                     break;
@@ -85,24 +92,32 @@ export class LLMService {
                 }
                 // Parse the response JSON with appropriate type
                 let responseText;
+                let cutOff;
                 switch (this.config.provider) {
                     case 'OPEN_AI': {
                         const data = await response.json();
                         responseText = data.choices[0].message.content;
+                        cutOff = data.choices[0].finish_reason === 'length';
                         break;
                     }
                     case 'ANTHROPIC': {
                         const data = await response.json();
                         responseText = data.content[0].text;
+                        cutOff = data.stop_reason === 'max_tokens';
                         break;
                     }
                     case 'GEMINI': {
                         const data = await response.json();
                         responseText = data.candidates[0].content.parts[0].text;
+                        cutOff = data.candidates[0].finishReason === 'MAX_TOKENS';
                         break;
                     }
                     default:
                         throw new Error(`Unsupported LLM provider: ${this.config.provider}`);
+                }
+                if (cutOff) {
+                    throw new Error(`The review was cut off at the ${maxTokens}-token output limit. ` +
+                        `Set LLM_MAX_TOKENS higher, use detailLevel "basic", or review fewer files.`);
                 }
                 // Parse the result
                 return this.parseReviewResponse(responseText);

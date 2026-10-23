@@ -16,9 +16,10 @@ export class CodeReviewPromptBuilder {
      * Builds a code review prompt
      * @param code Code to review
      * @param options Code review options
+     * @param part Which part of the codebase this is, when it was split
      * @returns Prompt text
      */
-    buildCodeReviewPrompt(code, options) {
+    buildCodeReviewPrompt(code, options, part) {
         const focusAreasText = options.focusAreas
             .map((area) => {
             switch (area) {
@@ -39,6 +40,9 @@ export class CodeReviewPromptBuilder {
         const detailLevelText = options.detailLevel === 'detailed'
             ? 'Provide a comprehensive, in-depth review with specific line references and detailed explanations'
             : 'Provide a high-level overview of key findings and most critical issues';
+        const partText = part
+            ? `\nSCOPE:\nThis is part ${part.index} of ${part.total} of a larger codebase. Review only the code shown, and do not report code from other parts as missing.\n`
+            : '';
         return `
 You are an expert code reviewer with deep knowledge of programming best practices, security, and performance optimization.
 
@@ -50,7 +54,7 @@ ${focusAreasText}
 
 DETAIL LEVEL:
 ${detailLevelText}
-
+${partText}
 ANALYSIS APPROACH:
 1. First pass: Get a high-level understanding of the code structure and purpose
 2. Second pass: Identify potential issues based on the focus areas

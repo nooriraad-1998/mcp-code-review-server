@@ -10,6 +10,10 @@ import { CodeReviewPromptBuilder } from './prompt.js';
 import { CodeProcessor } from './processor.js';
 import { callWithRetry } from './errors.js';
 /**
+ * Default maximum number of parts of a large codebase to review
+ */
+const DEFAULT_MAX_PARTS = 5;
+/**
  * Service for performing code reviews
  */
 export class CodeReviewService {
@@ -44,20 +48,66 @@ export class CodeReviewService {
      */
     async reviewCodeFromRepomix(repomixOutput, options) {
         console.error('Processing Repomix output...');
-        const processedRepo = await this.codeProcessor.processRepomixOutput(repomixOutput);
-        console.error(`Processed Repomix output (${processedRepo.length} characters)`);
-        return this.reviewCode(processedRepo, options);
+        const parts = await this.codeProcessor.processRepomixOutput(repomixOutput);
+        const partsToReview = parts.slice(0, this.maxParts());
+        console.error(`Reviewing ${partsToReview.length} of ${parts.length} part(s)`);
+        const results = [];
+        for (let i = 0; i < partsToReview.length; i++) {
+            const part = parts.length > 1 ? { index: i + 1, total: parts.length } : undefined;
+            results.push(await this.reviewCode(partsToReview[i], options, part));
+        }
+        return this.mergeResults(results, parts.length);
+    }
+    /**
+     * Reads the maximum number of parts to review from REVIEW_MAX_PARTS
+     * @returns Maximum number of parts (each part is one LLM request)
+     */
+    maxParts() {
+        const value = process.env.REVIEW_MAX_PARTS;
+        if (!value) {
+            return DEFAULT_MAX_PARTS;
+        }
+        const parsed = Number(value);
+        if (!Number.isInteger(parsed) || parsed <= 0) {
+            throw new Error(`REVIEW_MAX_PARTS must be a positive whole number, got "${value}"`);
+        }
+        return parsed;
+    }
+    /**
+     * Combines the reviews of each part into one result
+     * @param results Review result for each reviewed part, in order
+     * @param totalParts Number of parts the codebase was split into
+     * @returns Combined code review result
+     */
+    mergeResults(results, totalParts) {
+        const coverage = { reviewedParts: results.length, totalParts };
+        let summary = results.length === 1
+            ? results[0].summary
+            : results.map((result, i) => `Part ${i + 1}: ${result.summary}`).join('\n');
+        if (results.length < totalParts) {
+            const [reviewed, verb] = results.length === 1 ? ['part 1', 'was'] : [`parts 1-${results.length}`, 'were'];
+            summary = `Only ${reviewed} of ${totalParts} ${verb} reviewed (REVIEW_MAX_PARTS=${results.length}); ` +
+                `the rest of the codebase was not checked.\n${summary}`;
+        }
+        return {
+            summary,
+            issues: results.flatMap((result) => result.issues),
+            strengths: results.flatMap((result) => result.strengths),
+            recommendations: results.flatMap((result) => result.recommendations),
+            coverage
+        };
     }
     /**
      * Reviews code
      * @param code Code to review
      * @param options Code review options
+     * @param part Which part of the codebase this is, when it was split
      * @returns Code review result
      */
-    async reviewCode(code, options) {
+    async reviewCode(code, options, part) {
         try {
             console.error('Building code review prompt...');
-            const prompt = this.promptBuilder.buildCodeReviewPrompt(code, options);
+            const prompt = this.promptBuilder.buildCodeReviewPrompt(code, options, part);
             console.error('Sending code to LLM for review...');
             // Use retry logic for robustness
             const result = await callWithRetry(() => this.llmService.generateReview(prompt), 3, // max retries

@@ -65,10 +65,20 @@ export function loadLLMConfig(): LLMConfig {
   const modelEnvVar = modelEnvVars[provider as LLMProvider];
   const model = process.env[modelEnvVar] || defaultModels[provider as LLMProvider];
   console.error(`Using LLM provider: ${provider}, model: ${model}`);
-  
+
+  // Get the output token limit
+  let maxTokens: number | undefined;
+  if (process.env.LLM_MAX_TOKENS) {
+    maxTokens = Number(process.env.LLM_MAX_TOKENS);
+    if (!Number.isInteger(maxTokens) || maxTokens <= 0) {
+      throw new Error(`LLM_MAX_TOKENS must be a positive whole number, got "${process.env.LLM_MAX_TOKENS}"`);
+    }
+  }
+
   return {
     provider: provider as LLMProvider,
     model,
-    apiKey
+    apiKey,
+    maxTokens
   };
 } 
