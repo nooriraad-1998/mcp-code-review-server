@@ -24,9 +24,9 @@ const apiKeyEnvVars: Record<LLMProvider, string> = {
  * Default models for each provider
  */
 const defaultModels: Record<LLMProvider, string> = {
-  OPEN_AI: 'gpt-4o',
-  ANTHROPIC: 'claude-3-opus-20240307',
-  GEMINI: 'gemini-1.5-pro'
+  OPEN_AI: 'gpt-6-astra',
+  ANTHROPIC: 'claude-opus-5-5',
+  GEMINI: 'gemini-2.5-pro'
 };
 
 /**
