@@ -25,6 +25,7 @@ mock.module("node-fetch", () => ({
 const { LLMService } = await import("../../src/llm/service.js");
 const { CodeReviewService } = await import("../../src/llm/codeReviewService.js");
 const { loadLLMConfig } = await import("../../src/llm/config.js");
+const { callWithRetry } = await import("../../src/llm/errors.js");
 
 const validReview = JSON.stringify({ summary: "ok", issues: [], strengths: [], recommendations: [] });
 const cutOffReview = '{"summary": "ok", "issues": [{"type": "QUAL';
@@ -126,6 +127,63 @@ describe("Output token limit", () => {
       expect(error.message).toMatch(/LLM_MAX_TOKENS/);
     });
   }
+});
+
+describe("Retries", () => {
+  const config = { provider: "ANTHROPIC" as const, model: "claude-test", apiKey: "key" };
+  const review = () => callWithRetry(() => new LLMService(config).generateReview("prompt"), 3, 1);
+
+  function errorResponse(status: number) {
+    return { ok: false, status, statusText: "Error", text: async () => "error body", json: async () => ({}) };
+  }
+
+  for (const status of [429, 500, 503, 529]) {
+    it(`retries a ${status} reply and returns the next successful one`, async () => {
+      respond = () => (requests.length === 1 ? errorResponse(status) : replies.ANTHROPIC(validReview));
+
+      const result = await review();
+
+      expect(requests.length).toBe(2);
+      expect(result.summary).toBe("ok");
+    });
+  }
+
+  it("retries a network error", async () => {
+    respond = (request) => {
+      if (requests.length === 1) {
+        throw new Error(`request to ${request.url} failed, reason: socket hang up`);
+      }
+      return replies.ANTHROPIC(validReview);
+    };
+
+    const result = await review();
+
+    expect(requests.length).toBe(2);
+    expect(result.summary).toBe("ok");
+  });
+
+  for (const status of [400, 401, 404]) {
+    it(`does not retry a ${status} reply`, async () => {
+      respond = () => errorResponse(status);
+
+      await expect(review()).rejects.toThrow(new RegExp(String(status)));
+      expect(requests.length).toBe(1);
+    });
+  }
+
+  it("does not retry a cut-off reply", async () => {
+    respond = () => replies.ANTHROPIC(cutOffReview, true);
+
+    await expect(review()).rejects.toThrow(/cut off/);
+    expect(requests.length).toBe(1);
+  });
+
+  it("gives up after the maximum number of retries", async () => {
+    respond = () => errorResponse(529);
+
+    await expect(review()).rejects.toThrow(/529/);
+    expect(requests.length).toBe(4);
+  });
 });
 
 describe("Large codebases", () => {

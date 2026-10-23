@@ -6,7 +6,21 @@
  */
 
 import { LLMConfig, CodeReviewOptions, CodeReviewResult } from './types.js';
+import { RetryableAPIError } from './errors.js';
 import fetch from 'node-fetch';
+
+/**
+ * Prefixes an error message with context, keeping whether it is retryable
+ * @param error The original error
+ * @param context Text to put before the original message
+ * @returns A new error of the same kind
+ */
+function withContext(error: unknown, context: string): Error {
+  const message = `${context}: ${(error as Error).message}`;
+  return error instanceof RetryableAPIError
+    ? new RetryableAPIError(message, error.retryable)
+    : new Error(message);
+}
 
 // Response types for different LLM providers
 interface OpenAIResponse {
@@ -122,15 +136,26 @@ export class LLMService {
       
       // Make the API request
       try {
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(requestBody)
-        });
-        
+        let response;
+        try {
+          response = await fetch(endpoint, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(requestBody)
+          });
+        } catch (error) {
+          // Network failures are usually transient
+          throw new RetryableAPIError((error as Error).message);
+        }
+
         if (!response.ok) {
           const errorText = await response.text();
-          throw new Error(`LLM API request failed: ${response.status} ${response.statusText} - ${errorText}`);
+          // Rate limits (429) and server or overload errors (5xx) are worth retrying
+          const retryable = response.status === 429 || response.status >= 500;
+          throw new RetryableAPIError(
+            `LLM API request failed: ${response.status} ${response.statusText} - ${errorText}`,
+            retryable
+          );
         }
         
         // Parse the response JSON with appropriate type
@@ -174,11 +199,11 @@ export class LLMService {
         return this.parseReviewResponse(responseText);
       } catch (error) {
         console.error('Fetch error:', error);
-        throw new Error(`API request failed: ${(error as Error).message}`);
+        throw withContext(error, 'API request failed');
       }
     } catch (error) {
       console.error('LLM request failed:', error);
-      throw new Error(`Failed to generate review: ${(error as Error).message}`);
+      throw withContext(error, 'Failed to generate review');
     }
   }
   
