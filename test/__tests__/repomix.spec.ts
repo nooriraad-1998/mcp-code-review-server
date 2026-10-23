@@ -97,6 +97,44 @@ describe("Repomix", () => {
     expect(fs.existsSync(marker)).toBe(false);
   });
 
+  it("never runs a repomix config file from the reviewed repository", async () => {
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "repomix-config-"));
+    const marker = path.join(os.tmpdir(), `repomix-config-ran-${process.pid}`);
+    fs.rmSync(marker, { force: true });
+    fs.writeFileSync(path.join(repo, "code.js"), "function ok() {}");
+    fs.writeFileSync(
+      path.join(repo, "repomix.config.js"),
+      `require("fs").writeFileSync(${JSON.stringify(marker)}, "ran");\nmodule.exports = {};\n`
+    );
+
+    try {
+      const output = await executeRepomix({ repoPath: repo });
+
+      expect(fs.existsSync(marker)).toBe(false);
+      expect(output).toContain("code.js");
+    } finally {
+      fs.rmSync(repo, { recursive: true, force: true });
+      fs.rmSync(marker, { force: true });
+    }
+  });
+
+  it("ignores repomix settings from the reviewed repository", async () => {
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "repomix-config-"));
+    fs.writeFileSync(path.join(repo, "code.js"), "function ok() {}");
+    fs.writeFileSync(
+      path.join(repo, "repomix.config.json"),
+      JSON.stringify({ security: { enableSecurityCheck: false }, ignore: { customPatterns: ["code.js"] } })
+    );
+
+    try {
+      const output = await executeRepomix({ repoPath: repo });
+
+      expect(output).toContain("function ok() {}");
+    } finally {
+      fs.rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
   it("rejects specificFiles that point outside repoPath", async () => {
     await expect(
       executeRepomix({ repoPath: testDir, specificFiles: ["../../package.json"] })
