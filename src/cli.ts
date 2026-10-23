@@ -7,7 +7,7 @@
  */
 
 import * as path from 'path';
-import { executeRepomix } from './repomix.js';
+import { packRepository } from './repomix.js';
 import { createCodeReviewService } from './llm/index.js';
 import { CodeReviewIssue, CodeReviewResult } from './llm/types.js';
 
@@ -91,7 +91,7 @@ Options:
     
     // Execute Repomix to get the flattened codebase
     console.log('\nExecuting Repomix to flatten the codebase...');
-    const repomixOutput = await executeRepomix({
+    const { output: repomixOutput, excludedFiles } = await packRepository({
       repoPath,
       specificFiles,
       fileTypes,
@@ -108,7 +108,7 @@ Options:
     const reviewResult = await codeReviewService.reviewCodeFromRepomix(repomixOutput, {
       detailLevel,
       focusAreas,
-    });
+    }, excludedFiles);
     
     // Display the results
     console.log('\nCode Review Results:');

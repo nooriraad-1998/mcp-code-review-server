@@ -18,7 +18,7 @@
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { executeRepomix, RepomixOptions } from './repomix.js';
+import { executeRepomix, packRepository, RepomixOptions } from './repomix.js';
 import { installCrashHandlers } from './crashHandlers.js';
 import * as fs from 'fs';
 import { createCodeReviewService, CodeReviewOptions, CodeReviewResult } from './llm/index.js';
@@ -82,7 +82,7 @@ server.tool(
         excludePaths: params.excludePaths,
       };
       
-      const repomixOutput = await executeRepomix(repomixOptions);
+      const { output: repomixOutput, excludedFiles } = await packRepository(repomixOptions);
       
       // Set up review options
       const reviewOptions: CodeReviewOptions = {
@@ -95,7 +95,7 @@ server.tool(
         const codeReviewService = createCodeReviewService();
         
         // Perform the code review
-        const reviewResult = await codeReviewService.reviewCodeFromRepomix(repomixOutput, reviewOptions);
+        const reviewResult = await codeReviewService.reviewCodeFromRepomix(repomixOutput, reviewOptions, excludedFiles);
         
         // Format the response
         return {

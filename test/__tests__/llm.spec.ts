@@ -262,4 +262,16 @@ describe("Large codebases", () => {
     expect(result.summary).toBe("summary 1");
     expect(result.coverage).toEqual({ reviewedParts: 1, totalParts: 1 });
   });
+
+  it("reports files the secret scan left out as high security issues", async () => {
+    const { service } = serviceWithFakeLLM();
+
+    const result = await service.reviewCodeFromRepomix("File: a.ts\nconst a = 1;\n", options, [
+      { path: "src/db.js", issueCount: 2 },
+    ]);
+
+    expect(result.issues[0]).toMatchObject({ type: "SECURITY", severity: "HIGH" });
+    expect(result.issues[0].description).toContain("src/db.js contains 2 likely credentials and was not reviewed");
+    expect(result.issues[1].description).toBe("issue 1");
+  });
 });
